@@ -2,4 +2,6 @@
     <string name="app_name">ePlayer</string>
     <string name="action_settings">Settings</string>
     <string name="title_activity_player">Player</string>
+    <string name="now_playing">Now Playing</string>
+    <string name="player_control_buttons">Player Control Buttons</string>
 </resources>
