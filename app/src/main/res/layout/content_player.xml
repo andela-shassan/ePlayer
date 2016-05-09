@@ -22,6 +22,9 @@
         android:paddingBottom="5dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
+        android:singleLine="true"
+        android:ellipsize="marquee"
+        android:scrollHorizontally="true"
         android:textColor="@color/colorAccent"
         />
 

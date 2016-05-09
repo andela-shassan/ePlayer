@@ -1,20 +1,16 @@
 package com.nobest.andela.eplayer;
 
-import android.annotation.TargetApi;
 import android.content.Intent;
-import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
-import android.widget.Toast;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -35,11 +31,11 @@ public class MediaPlayback extends AppCompatActivity {
 
         songList = loadSongs(Environment.getExternalStorageDirectory());
         songFiles = new String[songList.size()];
-        for (int i = 0; i < songList.size(); i++){
-            songFiles[i] = i+1 + "  " + songList.get(i).getName();
+        for (int i = 0; i < songList.size(); i++) {
+            songFiles[i] = i + 1 + "  " + songList.get(i).getName();
         }
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), R.layout.song_layout_model,R.id.song, songFiles );
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(getApplicationContext(), R.layout.song_layout_model, R.id.song, songFiles);
         songs.setAdapter(adapter);
         songs.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
@@ -49,6 +45,10 @@ public class MediaPlayback extends AppCompatActivity {
                         .putExtra("position", position)
                         .putExtra("play_list", songList);
                 startService(player);
+
+                Intent player2 = new Intent(getApplicationContext(), Player.class);
+                startActivity(player2);
+
             }
         });
 
@@ -58,12 +58,11 @@ public class MediaPlayback extends AppCompatActivity {
         File[] files = path.listFiles();
         ArrayList<File> filesFound = new ArrayList<>();
 
-        for(File singleFile : files){
-            if (singleFile.getName().endsWith(".mp3")){
+        for (File singleFile : files) {
+            if (!singleFile.getName().startsWith(".") && singleFile.getName().endsWith(".mp3")) {
                 filesFound.add(singleFile);
-            }
-            else {
-                if(singleFile.isDirectory() && !(singleFile.isHidden())){
+            } else {
+                if (singleFile.isDirectory() && !(singleFile.isHidden())) {
                     filesFound.addAll(loadSongs(singleFile));
                 }
             }
@@ -87,17 +86,3 @@ public class MediaPlayback extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
 }
-
-
-/*@TargetApi(Build.VERSION_CODES.LOLLIPOP)
-    private void requestAccessToStorage(){
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        startActivityForResult(intent, 4232);
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == 4232){
-
-        }
-    }*/

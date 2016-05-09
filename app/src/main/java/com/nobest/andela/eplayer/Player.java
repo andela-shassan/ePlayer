@@ -1,13 +1,12 @@
 package com.nobest.andela.eplayer;
 
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
-import android.media.MediaPlayer;
-import android.net.Uri;
+import android.content.IntentFilter;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
-import android.util.Log;
 import android.view.View;
 import android.widget.ImageButton;
 import android.widget.ImageView;
@@ -20,19 +19,22 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeUnit;
 
 public class Player extends AppCompatActivity implements View.OnClickListener,
-        SeekBar.OnSeekBarChangeListener, MediaPlayer.OnCompletionListener {
+        SeekBar.OnSeekBarChangeListener {
 
-    static MediaPlayer mediaPlayer;
+    // MediaPlayer mediaPlayer;
     private ArrayList<File> songsList;
     private int position;
     private SeekBar seekBar;
     ImageButton previous, backward, play, forward, next, stop;
     ImageView albumArt;
     private TextView time_duration, elapsed_time, now_playing;
-    private Runnable runnable;
-    private Handler handler;
     //private Thread seekBarThread;
     private ProgressBar progressBar1;
+    private boolean receiverRegistered;
+    private Runnable runnable;
+    private BroadcastReceiver broadcastReceiver;
+    public static final String CONTROL_BUTTONS = "com.nobest.eplayer.control.buttons";
+    Intent controlButtonsIntent;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,14 +43,12 @@ public class Player extends AppCompatActivity implements View.OnClickListener,
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
-        Intent intent = getIntent();
-        Bundle bundle = intent.getExtras();
-        songsList = (ArrayList) bundle.getParcelableArrayList("play_list");
-        position = bundle.getInt("position");
+        controlButtonsIntent = new Intent(CONTROL_BUTTONS);
 
         time_duration = (TextView) findViewById(R.id.time_duration);
         elapsed_time = (TextView) findViewById(R.id.elapsed_time);
         now_playing = (TextView) findViewById(R.id.now_playing);
+        now_playing.setSelected(true);
 
         seekBar = (SeekBar) findViewById(R.id.seekBar);
         previous = (ImageButton) findViewById(R.id.button_prev);
@@ -60,9 +60,6 @@ public class Player extends AppCompatActivity implements View.OnClickListener,
         albumArt = (ImageView) findViewById(R.id.album_art);
         progressBar1 = (ProgressBar) findViewById(R.id.progressBar1);
 
-        //play.setBackgroundResource(R.drawable.pause);
-        //play.setImageResource(R.drawable.pause);
-
         previous.setOnClickListener(this);
         backward.setOnClickListener(this);
         play.setOnClickListener(this);
@@ -70,47 +67,28 @@ public class Player extends AppCompatActivity implements View.OnClickListener,
         next.setOnClickListener(this);
         stop.setOnClickListener(this);
 
-        stopMediaPlayer();
-        createMediaPlayer(position).start();
-
         seekBar.setOnClickListener(this);
         seekBar.setOnSeekBarChangeListener(this);
 
-        startSeekBar().run();
-    }
-
-    private Runnable startSeekBar() {
-        handler = new android.os.Handler();
-        //if (runnable == null) {
-        runnable = new Runnable() {
+        broadcastReceiver = new BroadcastReceiver() {
             @Override
-            public void run() {
-                try {
-                    mediaPlayer.setOnCompletionListener(Player.this);
-                    int currentPosition = mediaPlayer.getCurrentPosition();
-                    seekBar.setProgress(currentPosition);
-                    progressBar1.setProgress(currentPosition);
-                    elapsed_time.setText(timeFormatter(currentPosition));
-                    int duration = mediaPlayer.getDuration();
-                    time_duration.setText(timeFormatter(duration));
-                    seekBar.setMax(duration);
-                    progressBar1.setMax(duration);
-                    handler.postDelayed(runnable, 0);
-                }catch (IllegalStateException ise){
-                    ise.printStackTrace();
-                }
+            public void onReceive(Context context, Intent intent) {
+                setUpUI(intent);
+                //startSeekBar(intent);
             }
         };
-        // }
-        return runnable;
+        registerReceiver(broadcastReceiver, new IntentFilter(PlayerService.PLAYER_SERVICE_BROADCAST));
     }
 
-    private MediaPlayer createMediaPlayer(int position) {
-        Uri uri = Uri.parse(songsList.get(position).toString());
-        String title = songsList.get(position).toString().substring(songsList.get(position).toString().lastIndexOf("/") + 1);
-        now_playing.setText(title);
-//        startSeekBar().run();
-        return mediaPlayer = MediaPlayer.create(getApplicationContext(), uri);
+    private void setUpUI(Intent intent) {
+        int duration = intent.getIntExtra("duration",0);
+        seekBar.setMax(duration);
+        int progress = intent.getIntExtra("current_position",0);
+        seekBar.setProgress(progress);
+        receiverRegistered = true;
+        now_playing.setText(intent.getStringExtra("now_playing"));
+        time_duration.setText(timeFormatter(duration));
+        elapsed_time.setText(timeFormatter(progress));
     }
 
     @Override
@@ -118,80 +96,43 @@ public class Player extends AppCompatActivity implements View.OnClickListener,
         int id = v.getId();
         switch (id) {
             case R.id.imageButton_stop:
-                stopMediaPlayer();
-                createMediaPlayer(position);
-                handler.removeCallbacks(runnable);
+                controlButtonsIntent.putExtra("value", 10);
+                seekBar.setProgress(0);
                 break;
             case R.id.button_play:
-                if (mediaPlayer.isPlaying()) {
-                    mediaPlayer.pause();
-                    handler.removeCallbacks(runnable);
-                } else {
-                    mediaPlayer.start();
-                    startSeekBar().run();
-                }
+                controlButtonsIntent.putExtra("value", 0);
                 break;
             case R.id.button_backward:
-                if (mediaPlayer.isPlaying()) {
-                    mediaPlayer.seekTo(mediaPlayer.getCurrentPosition() - 5000);
-                }
+                controlButtonsIntent.putExtra("value", -1);
                 break;
             case R.id.button_forward:
-                if (mediaPlayer.isPlaying()) {
-                    mediaPlayer.seekTo(mediaPlayer.getCurrentPosition() + 5000);
-                }
+                controlButtonsIntent.putExtra("value", 1);
                 break;
             case R.id.button_next:
-                playNext();
+                controlButtonsIntent.putExtra("value", 2);
                 break;
             case R.id.button_prev:
-                playPrevious();
+                controlButtonsIntent.putExtra("value", -2);
                 break;
             default:
                 break;
         }
+        sendBroadcast(controlButtonsIntent);
     }
 
-    private void playPrevious() {
-        stopMediaPlayer();
-        position = (position == 0) ? songsList.size() - 1 : position - 1;
-        createMediaPlayer(position).start();
-        Log.d("semiu", position + "");
-        startSeekBar().run();
-    }
-
-    public void playNext() {
-        stopMediaPlayer();
-        position = ((position + 1) % songsList.size());
-        createMediaPlayer(position).start();
-        Log.d("semiu", position + "");
-        startSeekBar().run();
-    }
-
-    private void stopMediaPlayer() {
-        if (mediaPlayer != null) {
-            mediaPlayer.stop();
-            seekBar.setProgress(0);
-            mediaPlayer.release();
-            handler.removeCallbacks(runnable);
-        }
-    }
 
     @Override
-    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
-        if (fromUser) {
-            mediaPlayer.seekTo(seekBar.getProgress());
-        }
-    }
+    public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {}
 
     @Override
-    public void onStartTrackingTouch(SeekBar seekBar) {
-
-    }
+    public void onStartTrackingTouch(SeekBar seekBar) {}
 
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
-        mediaPlayer.seekTo(seekBar.getProgress());
+        int pos = seekBar.getProgress();
+        controlButtonsIntent.putExtra("value", 100);
+        controlButtonsIntent.putExtra("pos", pos);
+        sendBroadcast(controlButtonsIntent);
     }
 
     private String timeFormatter(long milliseconds) {
@@ -207,41 +148,27 @@ public class Player extends AppCompatActivity implements View.OnClickListener,
 
     @Override
     protected void onDestroy() {
-        stopMediaPlayer();
-        mediaPlayer.release();
+
+        if (receiverRegistered){
+            try {
+                unregisterReceiver(broadcastReceiver);
+                receiverRegistered = false;
+            }catch (Exception e){
+                e.printStackTrace();
+            }
+        }
         super.onDestroy();
     }
 
     @Override
-    public void onCompletion(MediaPlayer mp) {
-        if (position != songsList.size() - 1) {
-            playNext();
-        }
+    protected void onPause() {
+        unregisterReceiver(broadcastReceiver);
+        super.onPause();
+    }
+
+    @Override
+    protected  void onResume(){
+        super.onResume();
+        registerReceiver(broadcastReceiver, new IntentFilter(PlayerService.PLAYER_SERVICE_BROADCAST));
     }
 }
-
-
-
- /*seekBarThread = new Thread(){
-            @Override
-            public void run() {
-                int currentPosition = mediaPlayer.getCurrentPosition();
-                int duration = mediaPlayer.getDuration();
-                while (currentPosition <= duration){
-                    try {
-                        sleep(0);
-                        currentPosition = mediaPlayer.getCurrentPosition();
-                        seekBar.setProgress(currentPosition);
-                        if (currentPosition == duration){
-                            playNext();
-                        }
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                super.run();
-            }
-        };*/
-
-//seekBarThread.start();
